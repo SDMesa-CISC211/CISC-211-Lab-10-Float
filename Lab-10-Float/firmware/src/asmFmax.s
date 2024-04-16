@@ -29,8 +29,8 @@ nameStrPtr: .word nameStr   /* Assign the mem loc of nameStr to nameStrPtr */
 .type mantMax,%gnu_unique_object
 
 .global sb0,sb1,storedExp0,storedExp1,realExp0,realExp1,mant0,mant1
+.type sb0,%gnu_unique_object
 .type sb1,%gnu_unique_object
-.type sb2,%gnu_unique_object
 .type storedExp0,%gnu_unique_object
 .type storedExp1,%gnu_unique_object
 .type realExp0,%gnu_unique_object
@@ -110,7 +110,8 @@ getSignBit:
                 as needed
             r2: address of mem to store unpacked REAL exponent
                 bits 23-30 (exponent) 
-                REAL means the unpacked value - 127
+                REAL means the unpacked value - 127, stored as a signed
+                32b value. Range [-127,128]
                 NOTE: the real exponent may be changed later in asmFmax
                 depending on whether the float is subnormal or +/- zero
                 Use realExp0, realExp1, or realExpMax for storage, as needed
@@ -172,6 +173,7 @@ where:
      realExpMax: The REAL exponent of the max value
                  i.e. the STORED exponent - 127 (or -126, see lecture
                  notes for details)
+                 The value is stored as a signed 32b number
      mantMax:    the lower 23b unpacked from the larger number
      
      SEE LECTURE SLIDES FOR EXACT REQUIREMENTS on when and how to 
@@ -193,7 +195,6 @@ asmFmax:
 /**********************************************************************/   
 .end  /* The assembler will not process anything after this directive!!! */
            
-
 
 
 
