@@ -4,6 +4,7 @@
 
 @ Declare the following to be in data memory
 .data  
+.align
 
 @ Define the globals so that the C code can access them
 
@@ -14,6 +15,8 @@
 /*** STUDENTS: Change the next line to your name!  **/
 nameStr: .asciz "Inigo Montoya"  
  
+.align
+
 /* initialize a global variable that C can access to print the nameStr */
 .global nameStrPtr
 .type nameStrPtr,%gnu_unique_object
