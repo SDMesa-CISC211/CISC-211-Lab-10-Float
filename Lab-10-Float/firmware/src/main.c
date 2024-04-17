@@ -75,69 +75,49 @@ static uint8_t uartTxBuffer[MAX_PRINT_LEN] = {0};
 // static char * fail = "FAIL";
 // static char * oops = "OOPS";
 
-// PROF COMMENT:
-// The ARM calling convention permits the use of up to 4 registers, r0-r3
-// to pass data into a function. Only one value can be returned from a C
-// function call. It will be stored in r0, which will be automatically
-// used by the C compiler as the function's return value.
-//
-// Function signature
+// Assembly function signature
 // For this lab, return the larger of the two floating point values passed in.
+// Note to profs:
 // The floats are being reinterpreted as uints so that they get passed to assy
 // in r0 and r1. Otherwise, C forces them to be passed in the fp registers
 // s0 and s1
 extern float * asmFmax(uint32_t, uint32_t);
 
 
-// Change the value below to 1 if you want to use the debug array.
-// You can change the debug array without fear of losing the original
-// test cases.
-// Leave it set to 0 if you want to use the exact array that will be used
-// for grading
-#define USE_DEBUG_TESTCASES 0
+// STUDENTS: To test a single test case,
+//           set debug_mode to true
+//           set debug_testcase to the test case you want to test.
+bool     debug_mode = false;
+uint32_t debug_testcase = 0;
 
-#if USE_DEBUG_TESTCASES
-static float tc[][2] = { // Modify these if you want to debug
-    {   1.175503179e-38, 1.10203478208e-38 },
-    {    -0.2,                 -0.1}, 
-    {     1.0,                  2.0}, 
-    {    -3.1,                 -1.2}, 
-    {    -7.25,                 -6.5}, 
-    {     NAN,                  1.0}, 
-    {    -1.0,                  NAN}, 
-    {     0.1,                  0.99},  // 
-    {     1.14437421182e-28,   785.066650391},  //
-    { -4000.1,                   0.0,},  // 
-    {    -1.9e-5,               -1.9e-5},  // 
-    {     1.347e10,              2.867e-10},  // 
-    {     1.4e-42,              -3.2e-43}, // subnormals
-    {     -2.4e-42,              2.313e29}, // subnormals
-    {    INFINITY,           NEG_INFINITY},
-    {    NEG_INFINITY,           -6.24},
-    {     1.0,                   0.0}
-};
-#else
 static float tc[][2] = { // DO NOT MODIFY THESE!!!!!
-    {   1.175503179e-38, 1.10203478208e-38 },
-    {    -0.2,                 -0.1}, 
-    {     1.0,                  2.0}, 
-    {    -3.1,                  -1.2}, 
-    {    -7.25,                 -6.5}, 
-    {     NAN,                  1.0}, 
-    {    -1.0,                  NAN}, 
-    {     0.1,                  0.99},  // 
-    {     1.14437421182e-28,   785.066650391},  //
-    { -4000.1,                   0.0,},  // 
-    {    -1.9e-5,               -1.9e-5},  // 
-    {     1.347e10,              2.867e-10},  // 
+    {   1.175503179e-38, 1.10203478208e-38 },  //  Test case 0
+    {    -0.2,                 -0.1},          //  Test case 1
+    {     1.0,                  2.0},          //  TC #2
+    {    -3.1,                  -1.2},         //  TC #3
+    {    -7.25,                 -6.5},         //  TC #4
+    {     NAN,                  1.0},          //  TC #5
+    {    -1.0,                  NAN},          //  TC #6
+    {     0.1,                  0.99},         //  TC #7
+    {     1.14437421182e-28,   785.066650391}, //  TC #8
+    { -4000.1,                   0.0,},        //  TC #9
+    {    -1.9e-5,               -1.9e-5},      //  TC #10
+    {     1.347e10,              2.867e-10},   //  TC #11
+
     // PROF NOTE: Check subnormals: they seem to generate 0x00000000 as inputs
-    {     1.4e-42,              -3.2e-43}, // subnormals
-    {     -2.4e-42,              2.313e29}, // subnormals
-    {    INFINITY,           NEG_INFINITY},
-    {    NEG_INFINITY,           -6.24},
-    {     1.0,                   0.0}
+    // PROF ADDENDUM 4/16/2024: Turns out some compilers and/or hardware convert
+    // subnormal numbers to 0. See:
+    // "Disabling subnormal floats at the code level"
+    // https://en.wikipedia.org/wiki/Subnormal_number
+    //
+    // Student's code should see these values as 0 and process accordingly
+    
+    {     1.4e-42,              -3.2e-43},     // subnormals   TC #12
+    {     -2.4e-42,              2.313e29},    // subnormals   TC #13
+    {    INFINITY,           NEG_INFINITY},    //  TC #14
+    {    NEG_INFINITY,           -6.24},       //  TC #15
+    {     1.0,                   0.0}          //  TC #16
 };
-#endif
 
 #define USING_HW 1
 
@@ -157,6 +137,21 @@ static void usartDmaChannelHandler(DMAC_TRANSFER_EVENT event, uintptr_t contextH
     }
 }
 #endif
+
+static void blinkAndLoopForever(uint32_t delay)
+{
+    RTC_Timer32Compare0Set(delay); // set blink period to specified delay
+    RTC_Timer32CounterSet(0); // reset timer to start at 0
+    isRTCExpired = false;
+
+    while(1)
+    {
+        isRTCExpired = false;
+        LED0_Toggle();
+        while (isRTCExpired == false); // wait here until timer expires
+    }
+
+}
 
 
 // *****************************************************************************
@@ -215,57 +210,67 @@ int main ( void )
             // Place to store the result of the call to the assy function
             float *max;
             
-            // Set to true and set the test number if you want to break at
-            // a particular test for debugging purposes.
-            if (false && iteration == 11)
+            // check to see if in debug mode and this is the testcase to debug,
+            // or if we are in normal test mode and running all test cases.
+            // If either is true, execute the test.
+            if ( (debug_mode == false) ||
+                 (debug_mode == true && debug_testcase == iteration) )
             {
-                // This is a NO-OP, put here as a convenient place to
-                // set a breakpoint for debugging a specific test case
-                max = (float *) NULL;
+                // Make the call to the assembly function
+                max = asmFmax(ff0,ff1);
+
+                testResult(iteration,tc[iteration][0],tc[iteration][1],
+                        max,
+                        &fMax,
+                        &passCount,
+                        &failCount,
+                        &isUSARTTxComplete);
+                totalPassCount += passCount;        
+                totalFailCount += failCount;        
+                totalTestCount += failCount + passCount;
+                if (debug_mode == true)
+                {
+                    break;
+                }
             }
+            ++iteration;
             
-            // Make the call to the assembly function
-            max = asmFmax(ff0,ff1);
-            
-            testResult(iteration,tc[iteration][0],tc[iteration][1],
-                    max,
-                    &fMax,
-                    &passCount,
-                    &failCount,
-                    &isUSARTTxComplete);
-            totalPassCount += passCount;        
-            totalFailCount += failCount;        
-            totalTestCount += failCount + passCount;        
-             ++iteration;
-            
+            // check to see if in debug mode and this was the debug testcase,
+            // or if we are in normal test mode and have completed all tests.
+            // If either is true, exit the test loop.
             if (iteration >= maxIterations)
             {
                 break; // tally the results and end program
             }
-            
+
         }
     }
 
 #if USING_HW
+    static char * t1 = "ALL TESTS COMPLETE!";
+    static char * t2 = "DEBUG MODE RESULT! IGNORE SCORE.";
+    char * testString = t1;
+    if (debug_mode == true)
+    {
+        testString = t2;
+    }
+
     snprintf((char*)uartTxBuffer, MAX_PRINT_LEN,
-            "========= %s: asmFloat.s ALL TESTS COMPLETE!\r\n"
+            "========= %s: asmFmax.s %s\r\n"
             "tests passed: %ld \r\n"
             "tests failed: %ld \r\n"
             "total tests:  %ld \r\n"
             "score: %ld/20 points \r\n\r\n",
-            (char *) nameStrPtr,
+            (char *) nameStrPtr, testString,
             totalPassCount,
             totalFailCount,
             totalTestCount,
             20*totalPassCount/totalTestCount); 
             isUSARTTxComplete = false;
-#if 0            
-    DMAC_ChannelTransfer(DMAC_CHANNEL_0, uartTxBuffer, \
-                    (const void *)&(SERCOM5_REGS->USART_INT.SERCOM_DATA), \
-                    strlen((const char*)uartTxBuffer));
-#endif
     
     printAndWait((char*)uartTxBuffer,&isUSARTTxComplete);
+
+    blinkAndLoopForever(PERIOD_1S);
 
 #else
             isRTCExpired = true;
