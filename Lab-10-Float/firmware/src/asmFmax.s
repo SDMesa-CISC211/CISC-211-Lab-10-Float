@@ -42,14 +42,14 @@ nameStrPtr: .word nameStr   /* Assign the mem loc of nameStr to nameStrPtr */
 .type mant1,%gnu_unique_object
  
 .align
-@ use these locations to store f1 values
+@ use these locations to store f0 values
 f0: .word 0
 sb0: .word 0
 storedExp0: .word 0  /* the unmodified 8b exp value extracted from the float */
 realExp0: .word 0
 mant0: .word 0
  
-@ use these locations to store f2 values
+@ use these locations to store f1 values
 f1: .word 0
 sb1: .word 0
 realExp1: .word 0
@@ -74,7 +74,7 @@ nanValue: .word 0x7FFFFFFF
 /********************************************************************
  function name: initVariables
     input:  none
-    output: initializes all f1*, f2*, and *Max varibales to 0
+    output: initializes all f0*, f1*, and *Max varibales to 0
 ********************************************************************/
 .global initVariables
  .type initVariables,%function
@@ -166,7 +166,7 @@ where:
      
      if f0 equals f1, return either one
      notes:
-        "greater than" means the most positive numeber.
+        "greater than" means the most positive number.
         For example, -1 is greater than -200
      
      The function must also unpack the greater number and update the 
